@@ -43,100 +43,15 @@ bool economia = false;  //Variável para indicar a economia de energia
 uint32_t ultimo_tempo_atividade = 0;    //Variável para armazenar o ultimo tempo de atividade
 uint volatile numero = 0;      //Variável para inicializar o numero com 0, indicando a camera 0 (WS2812B)
 uint16_t adc_x = 0, adc_y = 0;  //Variáveis para armazenar os valores do joystick
-bool modo_monitoramento = false;    //Variável para indicar o modo de monitoramento
+volatile bool alarme_disparado = false;    //Variável para indicar o modo de monitoramento
 uint buzzer_slice;  //Slice para o buzzer
+volatile int intensidade_percentual = 50; // Valor inicial entre 0 e 100
 
-/////////////////////////WEBSERVER////////////////////////////////////////////////
 //Prototipagem
+void set_one_led(uint8_t r, uint8_t g, uint8_t b, int numero);
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err);
 static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
 void tratar_requisicao_http(char *request);
-
-//WebServer: Início no main()
-void iniciar_webserver(){
-    if(cyw43_arch_init()) return;
-    cyw43_arch_enable_sta_mode();
-
-    printf("Conectando ao Wi-Fi...\n");
-    while(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)){
-        printf("Falha ao conectar!\n");
-        sleep_ms(3000);
-    }
-    printf("Conectado! IP: %s\n", ipaddr_ntoa(&netif_default->ip_addr));
-
-    struct tcp_pcb *server = tcp_new();
-    tcp_bind(server, IP_ADDR_ANY, 80);
-    server = tcp_listen(server);
-    tcp_accept(server, tcp_server_accept);
-}
-
-//Aceita conexão TCP
-static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err){
-    tcp_recv(newpcb, tcp_server_recv);
-    return ERR_OK;
-}
-
-//Requisição HTTP
-static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err){
-    if(!p) return tcp_close(tpcb);
-
-    char *request = (char *)malloc(p->len + 1);
-    memcpy(request, p->payload, p->len);
-    request[p->len] = '\0';
-    tratar_requisicao_http(request);
-
-    // Coleta de dados para status
-    int intensidade_percentual = (abs(adc_x - 2048) * 100) / 2048;
-    if(intensidade_percentual > 100) intensidade_percentual = 100;
-    bool atividade = abs(adc_y - 2048) > 500;
-
-    char html[1024];
-    snprintf(html, sizeof(html),
-         "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
-         "<html><head><title>Iluminacao Inteligente</title></head>"
-         "<body>"
-         "<h1>Sistema de Iluminacao</h1>"
-         "<h2>Area atual: %d</h2>"
-         "<p>Luminosidade atual: %d%%</p>"
-         "<p>Presenca: %s</p>"
-         "<br><form action=\"/area_prev\"><button>&larr; Area anterior</button></form>"
-         "<form action=\"/area_next\"><button>Proxima area &rarr;</button></form>"
-         "<br><form action=\"/aumentar_luz\"><button>+ Aumentar Luz</button></form>"
-         "<form action=\"/diminuir_luz\"><button>- Diminuir Luz</button></form>"
-         "</body></html>",
-         numero,
-         intensidade_percentual,
-         atividade ? "Sim" : "Nao");
-
-    tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);
-    tcp_output(tpcb);
-    free(request);
-    pbuf_free(p);
-    return ERR_OK;
-}
-
-//Trata a requisição HTTP
-void tratar_requisicao_http(char *request){
-    if (strstr(request, "GET /area_prev")){
-    numero--;   //Incrementa o valor do numero (matriz de leds)
-        if(numero == -1){   //Se chegar no 0 e for incrementado, volta ao 9
-            numero = 9; //Retorna ao 9
-        }
-    }else if(strstr(request, "GET /area_next")){
-        numero++;   //Incrementa o valor do numero (matriz de leds)
-        if(numero == 10){   //Se chegar no 9 e for incrementado, volta ao 0
-            numero = 0; //Retorna ao 0
-        }
-    }else if(strstr(request, "GET /aumentar_luz")){
-        if(led_r < 250){
-            led_r += 10; led_g += 10; led_b += 10;
-        }
-    }else if(strstr(request, "GET /diminuir_luz")){
-        if(led_r > 10){
-            led_r -= 10; led_g -= 10; led_b -= 10;
-        }
-    }
-}
 
 //////////////////////////////////////////BASE PRONTA//////////////////////////////////////////////////////////////////////
 //Display SSD1306
@@ -333,21 +248,6 @@ bool debounce_botao(uint gpio){
     return false;
 }
 
-//Função para as chamadas de interrupções nos botões A e B
-void gpio_irq_handler(uint gpio, uint32_t events){
-    if (gpio == BOTAO_A && debounce_botao(BOTAO_A)){
-    numero++;   //Incrementa o valor do numero (matriz de leds)
-        if(numero == 10){   //Se chegar no 9 e for incrementado, volta ao 0
-            numero = 0; //Retorna ao 0
-        }
-    set_one_led(led_r, led_g, led_b, numero);
-    }
-    if(gpio == BOTAO_B && debounce_botao(BOTAO_B)){
-        modo_monitoramento = !modo_monitoramento;   //Inverte o estado do monitoramento
-    }
-}
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 //Função para exibir informações no display
 void display_info(int luminosidade, bool atividade){
     char buffer[32];    //Buffer para armazenar a string
@@ -370,15 +270,6 @@ void display_info(int luminosidade, bool atividade){
     ssd1306_send_data(&ssd);    //Envia para o display
 }
 
-//Função para atualizar a intensidade da luz dos leds conforme a posição do joystick no eixo X
-void atualizar_leds(int eixo_x){
-    if(economia) return;    //Ignora se estamos em economia, já que estará apagado
-    //Calcula distância do centro (aproximadamente 2048)
-    int intensidade = abs(eixo_x - 2048) / 8; //Escala para 0-255 aprox
-    if (intensidade > 255) intensidade = 255;   //Limita para 0-255
-    set_one_led(intensidade, intensidade, intensidade, numero); //Envia para a matriz de leds a intensidade da luz (branca) da area
-}
-
 //Função para verificar se há presença de atividade na area com base no eixo Y
 void verificar_presenca(int eixo_y){
     int distancia = abs(eixo_y - 2048); //Calcula distância do centro
@@ -389,52 +280,182 @@ void verificar_presenca(int eixo_y){
             economia = true;    //Ativa a economia
             set_one_led(0, 0, 0, 10); //Apaga a luz da matriz de leds, utilizando o indice 10 definido
             gpio_put(LED_RED, 1); //Liga o LED vermelho, indicando modo de economia
-            bip_intercalado_suave();    //Toca o buzzer para indicar a economia
         }
     }else{
         economia = false;   //Desativa a economia
         gpio_put(LED_RED, 0); //atividade detectada
-        gpio_put(BUZZER_PIN, 0);    //Desliga o buzzer
         ultimo_tempo_atividade = to_ms_since_boot(get_absolute_time()); //Armazena o tempo da atividade
     }
 }
 
-int main(){
-    inicializar_componentes(); //Inicializar GPIOs, protocolos, comunicação...
-    
+/////////////////////////WEBSERVER////////////////////////////////////////////////
+// Atualiza LEDs conforme intensidade definida via Web
+void atualizar_leds_web(){
+    if(economia) return;
+    int intensidade = (intensidade_percentual * 255) / 100;
+    set_one_led(intensidade, intensidade, intensidade, numero);
+}
+
+//WebServer: Início no main()
+void iniciar_webserver(){
+    if(cyw43_arch_init()) return;
+    cyw43_arch_enable_sta_mode();
+
+    printf("Conectando ao Wi-Fi...\n");
+    while(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)){
+        printf("Falha ao conectar!\n");
+        sleep_ms(3000);
+    }
+    printf("Conectado! IP: %s\n", ipaddr_ntoa(&netif_default->ip_addr));
+
+    struct tcp_pcb *server = tcp_new();
+    tcp_bind(server, IP_ADDR_ANY, 80);
+    server = tcp_listen(server);
+    tcp_accept(server, tcp_server_accept);
+}
+
+//Aceita conexão TCP
+static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err){
+    tcp_recv(newpcb, tcp_server_recv);
+    return ERR_OK;
+}
+
+//Requisição HTTP
+static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err){
+    if(!p) return tcp_close(tpcb);
+
+    char *request = (char *)malloc(p->len + 1);
+    memcpy(request, p->payload, p->len);
+    request[p->len] = '\0';
+
+    // Resposta JSON para atualizações via AJAX
+    if (strstr(request, "GET /status")) {
+        bool atividade = abs(adc_y - 2048) > 500;
+        char json[64];
+        snprintf(json, sizeof(json),
+                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
+                 "{\"presenca\": \"%s\"}",
+                 atividade ? "Sim" : "Nao");
+        tcp_write(tpcb, json, strlen(json), TCP_WRITE_FLAG_COPY);
+        tcp_output(tpcb);
+        free(request);
+        pbuf_free(p);
+        return ERR_OK;
+    }
+
+    tratar_requisicao_http(request);
+
+    bool atividade = abs(adc_y - 2048) > 500;
+
+    char html[2048]; // Aumentado para suportar o JS
+    snprintf(html, sizeof(html),
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
+        "<html><head><meta charset='UTF-8'>"
+        "<title>Iluminacao Inteligente</title>"
+        "<script>"
+        "setInterval(() => {"
+        "fetch('/status').then(r => r.json()).then(data => {"
+        "document.getElementById('presenca').textContent = data.presenca;"
+        "});"
+        "}, 1000);"
+        "</script>"
+        "<style>"
+        "body { background-color: #b5e5fb; font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }"
+        "h1,h2,h4 { font-size: 32px; margin-bottom: 20px; }"
+        "button { background-color: LightGray; font-size: 24px; margin: 10px; padding: 10px 30px; border-radius: 10px; }"
+        "</style>"
+        "</head><body>"
+
+        "<h1>Sistema de Iluminacao</h1>"
+
+        "<div style='display: flex; justify-content: center; gap: 20px;'>"
+        "<form action=\"/area_prev\"><button>&larr; Area anterior</button></form>"
+        "<form action=\"/area_next\"><button>Proxima area &rarr;</button></form>"
+        "</div>"
+
+        "<h2>Area atual: %d</h2>"
+        "<h4>Luminosidade atual: %d%%</h4>"
+        "<h3>Presenca no local: <span id='presenca'>%s</span></h3>"
+
+        "<div style='display: flex; justify-content: center; gap: 20px;'>"
+        "<form action=\"/diminuir_luz\"><button>- Diminuir Luz</button></form>"
+        "<form action=\"/aumentar_luz\"><button>+ Aumentar Luz</button></form>"
+        "</div>"
+
+        "<div style='display: flex; justify-content: center; gap: 20px; margin-top: 10px;'>"
+        "<form action=\"/alarme_on\"><button>Disparar alarme</button></form>"
+        "<form action=\"/alarme_off\"><button>Desligar alarme</button></form>"
+        "</div>"
+
+        "</body></html>",
+        numero,
+        intensidade_percentual,
+        atividade ? "Sim" : "Nao"
+    );
+
+    tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);
+    tcp_output(tpcb);
+    free(request);
+    pbuf_free(p);
+    return ERR_OK;
+}
+
+//Trata a requisição HTTP
+void tratar_requisicao_http(char *request){
+    if (strstr(request, "GET /area_prev")){
+    numero--;   //Incrementa o valor do numero (matriz de leds)
+        if(numero == -1){   //Se chegar no 0 e for incrementado, volta ao 9
+            numero = 9; //Retorna ao 9
+        }
+    }else if(strstr(request, "GET /area_next")){
+        numero++;   //Incrementa o valor do numero (matriz de leds)
+        if(numero == 10){   //Se chegar no 9 e for incrementado, volta ao 0
+            numero = 0; //Retorna ao 0
+        }
+    }else if(strstr(request, "GET /aumentar_luz")){
+        intensidade_percentual += 10;
+        if(intensidade_percentual > 100) intensidade_percentual = 100;
+    }else if(strstr(request, "GET /diminuir_luz")){
+        intensidade_percentual -= 10;
+        if(intensidade_percentual < 0) intensidade_percentual = 0;
+        //set_one_led(led_r, led_g, led_b, numero);
+    }else if(strstr(request, "GET /alarme_on")){
+        alarme_disparado = true;
+    }
+    else if(strstr(request, "GET /alarme_off")){
+        alarme_disparado = false;
+        pwm_set_enabled(buzzer_slice, false); //Garantir desligamento imediato
+    }
+}
+
+int main() {
+    inicializar_componentes();
     iniciar_webserver();
 
-    //Configura as chamadas de interrupções para os botões A e B
-    gpio_set_irq_enabled_with_callback(BOTAO_A, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-    gpio_set_irq_enabled_with_callback(BOTAO_B, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
-
-    while(true){
-        int intensidade_percentual = 0; //Variável para armazenar a intensidade da luz
-        adc_select_input(0);            //Leitura do eixo Y
+    while (true) {
+        adc_select_input(0);
         int eixo_y = adc_read();
-        adc_select_input(1);            //Leitura do eixo X
-        int eixo_x = adc_read();
-    
-        intensidade_percentual = (abs(eixo_x - 2048) * 100) / 2048;     //Calcula a intensidade da luz em percentual
-        if(intensidade_percentual > 100) intensidade_percentual = 100;  //Limita para 0-99
+        adc_y = eixo_y; // Armazena global para acesso em Web
 
-        display_info(intensidade_percentual, abs(eixo_y - 2048) > 500); //Mostra as informações no display
+        if (intensidade_percentual > 100) intensidade_percentual = 100;
+        if (intensidade_percentual < 0) intensidade_percentual = 0;
 
-        verificar_presenca(eixo_y);     //Sempre verificar presença primeiro
-        atualizar_leds(eixo_x);         //Só vai atualizar se economia == false
-        if(!economia){
-        set_one_led(led_r, led_g, led_b, numero);
-        }       
-        
-        //UART - Comunicação Serial
-        if(economia){   //Se estamos em economia
-            printf("Area: %d | Modo Economia Ativado\n", numero);
-        }else{
-        printf("Area: %d | Luz: %d | Presenca: %s\n", numero, intensidade_percentual,
-            abs(eixo_y - 2048) > 500 ? "Sim" : "Nao");
+        display_info(intensidade_percentual, abs(eixo_y - 2048) > 500);
+        verificar_presenca(eixo_y);
+        atualizar_leds_web();
+
+        // Alarme sonoro intermitente controlado por botão web
+        if(alarme_disparado){
+            pwm_set_enabled(buzzer_slice, true);
+            sleep_ms(200);
+            pwm_set_enabled(buzzer_slice, false);
+            sleep_ms(800);
+        } else {
+            sleep_ms(300);
         }
 
-        sleep_ms(300);
+        printf("Area: %d | Luz: %d | Presenca: %s\n", numero, intensidade_percentual,
+               abs(eixo_y - 2048) > 500 ? "Sim" : "Nao");
     }
     return 0;
 }
