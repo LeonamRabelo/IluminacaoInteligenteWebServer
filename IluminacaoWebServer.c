@@ -34,6 +34,14 @@
 #define NUM_PIXELS 25   //Quantidade de LEDs na matriz
 #define NUM_NUMBERS 11  //Quantidade de numeros na matriz
 
+#define NUM_AREAS 10
+typedef struct{
+    int luminosidade;  //0-100%
+}AreaStatus;
+
+AreaStatus areas[NUM_AREAS];  //Vetor com dados de cada área
+
+
 //Variável global para armazenar a cor (Entre 0 e 255 para intensidade)
 uint8_t led_r = 20; //Intensidade do vermelho
 uint8_t led_g = 20; //Intensidade do verde
@@ -45,7 +53,6 @@ uint volatile numero = 0;      //Variável para inicializar o numero com 0, indi
 uint16_t adc_x = 0, adc_y = 0;  //Variáveis para armazenar os valores do joystick
 volatile bool alarme_disparado = false;    //Variável para indicar o modo de monitoramento
 uint buzzer_slice;  //Slice para o buzzer
-volatile int intensidade_percentual = 50; // Valor inicial entre 0 e 100
 
 //Prototipagem
 void set_one_led(uint8_t r, uint8_t g, uint8_t b, int numero);
@@ -292,7 +299,7 @@ void verificar_presenca(int eixo_y){
 // Atualiza LEDs conforme intensidade definida via Web
 void atualizar_leds_web(){
     if(economia) return;
-    int intensidade = (intensidade_percentual * 255) / 100;
+    int intensidade = (areas[numero].luminosidade * 255) / 100;
     set_one_led(intensidade, intensidade, intensidade, numero);
 }
 
@@ -327,71 +334,48 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
     char *request = (char *)malloc(p->len + 1);
     memcpy(request, p->payload, p->len);
     request[p->len] = '\0';
-
-    // Resposta JSON para atualizações via AJAX
-    if (strstr(request, "GET /status")) {
-        bool atividade = abs(adc_y - 2048) > 500;
-        char json[64];
-        snprintf(json, sizeof(json),
-                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
-                 "{\"presenca\": \"%s\"}",
-                 atividade ? "Sim" : "Nao");
-        tcp_write(tpcb, json, strlen(json), TCP_WRITE_FLAG_COPY);
-        tcp_output(tpcb);
-        free(request);
-        pbuf_free(p);
-        return ERR_OK;
-    }
-
     tratar_requisicao_http(request);
 
     bool atividade = abs(adc_y - 2048) > 500;
 
-    char html[2048]; // Aumentado para suportar o JS
-    snprintf(html, sizeof(html),
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
-        "<html><head><meta charset='UTF-8'>"
-        "<title>Iluminacao Inteligente</title>"
-        "<script>"
-        "setInterval(() => {"
-        "fetch('/status').then(r => r.json()).then(data => {"
-        "document.getElementById('presenca').textContent = data.presenca;"
-        "});"
-        "}, 1000);"
-        "</script>"
-        "<style>"
-        "body { background-color: #b5e5fb; font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }"
-        "h1,h2,h4 { font-size: 32px; margin-bottom: 20px; }"
-        "button { background-color: LightGray; font-size: 24px; margin: 10px; padding: 10px 30px; border-radius: 10px; }"
-        "</style>"
-        "</head><body>"
+    char html[1024];
+snprintf(html, sizeof(html),
+    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
+    "<!DOCTYPE html><html><head>"
+    "<meta charset='UTF-8'><title>Iluminaçãoo</title>"
+    "<style>"
+    "body {background:#46dd73;font-family:sans-serif;text-align:center;margin-top:30px;}"
+    "h1,h2,h3,h4 {margin:10px;}"
+    ".btns {display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top: 20px;}"
+    "button {background:lightgray;font-size:20px;padding:10px 20px;border-radius:8px;border:none;}"
+    "</style></head><body>"
 
-        "<h1>Sistema de Iluminacao</h1>"
+    "<h1>Sistema de Iluminacao</h1>"
 
-        "<div style='display: flex; justify-content: center; gap: 20px;'>"
-        "<form action=\"/area_prev\"><button>&larr; Area anterior</button></form>"
-        "<form action=\"/area_next\"><button>Proxima area &rarr;</button></form>"
-        "</div>"
+    "<div class='btns'>"
+    "<form action='/area_prev'><button>&larr; Anterior</button></form>"
+    "<form action='/area_next'><button>Proxima &rarr;</button></form>"
+    "</div>"
 
-        "<h2>Area atual: %d</h2>"
-        "<h4>Luminosidade atual: %d%%</h4>"
-        "<h3>Presenca no local: <span id='presenca'>%s</span></h3>"
+    "<h2>Area: %d</h2>"
+    "<h3>Luz: %d%%</h3>"
+    "<h3>Presenca: %s</h3>"
 
-        "<div style='display: flex; justify-content: center; gap: 20px;'>"
-        "<form action=\"/diminuir_luz\"><button>- Diminuir Luz</button></form>"
-        "<form action=\"/aumentar_luz\"><button>+ Aumentar Luz</button></form>"
-        "</div>"
+    "<div class='btns'>"
+    "<form action='/diminuir_luz'><button>- Luz</button></form>"
+    "<form action='/aumentar_luz'><button>+ Luz</button></form>"
+    "</div>"
 
-        "<div style='display: flex; justify-content: center; gap: 20px; margin-top: 10px;'>"
-        "<form action=\"/alarme_on\"><button>Disparar alarme</button></form>"
-        "<form action=\"/alarme_off\"><button>Desligar alarme</button></form>"
-        "</div>"
+    "<div class='btns'>"
+    "<form action='/alarme_on'><button>Disparar Alarme</button></form>"
+    "<form action='/alarme_off'><button>Parar Alarme</button></form>"
+    "</div>"
 
-        "</body></html>",
-        numero,
-        intensidade_percentual,
-        atividade ? "Sim" : "Nao"
-    );
+    "</body></html>",
+    numero,
+    areas[numero].luminosidade,
+    atividade ? "Sim" : "Nao"
+);
 
     tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);
     tcp_output(tpcb);
@@ -413,11 +397,11 @@ void tratar_requisicao_http(char *request){
             numero = 0; //Retorna ao 0
         }
     }else if(strstr(request, "GET /aumentar_luz")){
-        intensidade_percentual += 10;
-        if(intensidade_percentual > 100) intensidade_percentual = 100;
+        areas[numero].luminosidade += 10;
+        if(areas[numero].luminosidade > 100) areas[numero].luminosidade = 100;
     }else if(strstr(request, "GET /diminuir_luz")){
-        intensidade_percentual -= 10;
-        if(intensidade_percentual < 0) intensidade_percentual = 0;
+        areas[numero].luminosidade -= 10;
+        if(areas[numero].luminosidade < 0) areas[numero].luminosidade = 0;
         //set_one_led(led_r, led_g, led_b, numero);
     }else if(strstr(request, "GET /alarme_on")){
         alarme_disparado = true;
@@ -437,10 +421,10 @@ int main() {
         int eixo_y = adc_read();
         adc_y = eixo_y; // Armazena global para acesso em Web
 
-        if (intensidade_percentual > 100) intensidade_percentual = 100;
-        if (intensidade_percentual < 0) intensidade_percentual = 0;
+        if (areas[numero].luminosidade > 100) areas[numero].luminosidade = 100;
+        if (areas[numero].luminosidade < 0) areas[numero].luminosidade = 0;
 
-        display_info(intensidade_percentual, abs(eixo_y - 2048) > 500);
+        display_info(areas[numero].luminosidade, abs(eixo_y - 2048) > 500);
         verificar_presenca(eixo_y);
         atualizar_leds_web();
 
@@ -454,7 +438,7 @@ int main() {
             sleep_ms(300);
         }
 
-        printf("Area: %d | Luz: %d | Presenca: %s\n", numero, intensidade_percentual,
+        printf("Area: %d | Luz: %d | Presenca: %s\n", numero, areas[numero].luminosidade,
                abs(eixo_y - 2048) > 500 ? "Sim" : "Nao");
     }
     return 0;
