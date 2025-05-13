@@ -55,7 +55,9 @@ Ao conectar o Pico W à sua rede Wi-Fi, o endereço IP será exibido na serial. 
 No `main.c`, defina suas credenciais:
 
 #define WIFI_SSID "USER"
+
 #define WIFI_PASSWORD "SENHA"
+
 Altere para sua rede local antes de compilar.
 
 ⚙️ Compilação
