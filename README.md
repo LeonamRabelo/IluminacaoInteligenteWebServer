@@ -68,7 +68,9 @@ Altere para sua rede local antes de compilar.
 # 📸 Interface Web
 ![WebServer](image.png)
 
-🧠 Lógica de Presença
+---
+
+# 🧠 Lógica de Presença
 A presença é detectada se o valor do eixo Y do joystick ultrapassar determinado limite. Se não houver atividade por 2 segundos:
 
 💡 LED da área atual é desligado
