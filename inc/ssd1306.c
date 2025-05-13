@@ -77,8 +77,8 @@ void ssd1306_pixel(ssd1306_t *ssd, uint8_t x, uint8_t y, bool value) {
     ssd->ram_buffer[index] &= ~(1 << pixel);
 }
 
-
-/*void ssd1306_fill(ssd1306_t *ssd, bool value) {
+/*
+void ssd1306_fill(ssd1306_t *ssd, bool value) {
   uint8_t byte = value ? 0xFF : 0x00;
   for (uint8_t i = 1; i < ssd->bufsize; ++i)
     ssd->ram_buffer[i] = byte;
@@ -158,33 +158,27 @@ void ssd1306_draw_char(ssd1306_t *ssd, char c, uint8_t x, uint8_t y)
 {
   uint16_t index = 0;
 
-  if (c >= '0' && c <= '9')
+  // Verifica o caractere e calcula o índice correspondente na fonte
+  if (c >= ' ' && c <= '~') // Verifica se o caractere está na faixa ASCII válida
   {
-    index = (c - '0' + 1) * 8; // Para números
-  }
-  else if (c >= 'A' && c <= 'Z')
-  {
-    index = (c - 'A' + 11) * 8; // Para letras maiúsculas
-  }
-  else if (c >= 'a' && c <= 'z')
-  {
-    index = (c - 'a' + 37) * 8; // Para letras minúsculas (começando após as maiúsculas)
+    index = (c - ' ') * 8; // Calcula o índice baseado na posição do caractere na tabela ASCII
   }
   else
   {
-    return; // Caracter inválido, não faz nada
+    // Caractere inválido, desenha um espaço (ou pode ser tratado de outra forma)
+    index = 0; // Índice 0 corresponde ao caractere "nada" (espaço)
   }
 
+  // Desenha o caractere na tela
   for (uint8_t i = 0; i < 8; ++i)
   {
-    uint8_t line = font[index + i];
+    uint8_t line = font[index + i]; // Acessa a linha correspondente do caractere na fonte
     for (uint8_t j = 0; j < 8; ++j)
     {
-      ssd1306_pixel(ssd, x + i, y + j, line & (1 << j));
+      ssd1306_pixel(ssd, x + i, y + j, line & (1 << j)); // Desenha cada pixel do caractere
     }
   }
 }
-
 
 // Função para desenhar uma string
 void ssd1306_draw_string(ssd1306_t *ssd, const char *str, uint8_t x, uint8_t y)
