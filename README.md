@@ -1,7 +1,9 @@
 # 📡 Sistema de Iluminação Inteligente com Raspberry Pi Pico W
 
-Projeto embarcado com **Raspberry Pi Pico W** para controle inteligente de iluminação com:
+Projeto embarcado utilizando:
 
+- **RP2040**: Microcontrolador dual-core da Raspberry Pi
+- **CYW43439**: Módulo Wi-Fi/Bluetooth
 - Display **OLED SSD1306**
 - Interface **WebServer**
 - Controle de **10 áreas de iluminação**
@@ -28,7 +30,8 @@ Projeto embarcado com **Raspberry Pi Pico W** para controle inteligente de ilumi
 
 | Componente             | Descrição                         |
 |------------------------|-----------------------------------|
-| Raspberry Pi Pico W    | MCU principal com Wi-Fi           |
+| RP2040                 | MCU principal                     |
+| CYW43439               | Módulo Wi-Fi/Bluetooth            |
 | OLED SSD1306 (I2C)     | Display para informações          |
 | Matriz de LEDs WS2812  | Iluminação RGB                    |
 | Joystick analógico     | Entrada de presença               |
@@ -60,10 +63,9 @@ No `main.c`, defina suas credenciais:
 
 Altere para sua rede local antes de compilar.
 
-⚙️ Compilação
-Instale e configure o Pico SDK.
+---
 
-📸 Interface Web
+# 📸 Interface Web
 ![WebServer](image.png)
 
 🧠 Lógica de Presença
@@ -75,5 +77,5 @@ A presença é detectada se o valor do eixo Y do joystick ultrapassar determinad
 
 ---
 
-📃 Autor
+# 📃 Autor
 Leonam S. Rabelo
