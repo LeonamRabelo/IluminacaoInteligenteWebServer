@@ -147,32 +147,32 @@ void verificar_presenca(int eixo_y){
 /////////////////////////WEBSERVER////////////////////////////////////////////////
 // Atualiza LEDs conforme intensidade definida via Web
 void atualizar_leds_web(){
-    if(economia) return;
-    int intensidade = (areas[numero].luminosidade * 255) / 100;
-    set_one_led(intensidade, intensidade, intensidade, numero);
+    if(economia) return;    //Nao atualiza se estamos em modo de economia
+    int intensidade = (areas[numero].luminosidade * 255) / 100; //Calcula intensidade
+    set_one_led(intensidade, intensidade, intensidade, numero); //Atualiza leds na matriz de LEDs
 }
 
 //WebServer: Início no main()
 void iniciar_webserver(){
-    if(cyw43_arch_init()) return;
+    if(cyw43_arch_init()) return;   //Inicia o Wi-Fi
     cyw43_arch_enable_sta_mode();
 
-    printf("Conectando ao Wi-Fi...\n");
-    while(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)){
+    printf("Conectando ao Wi-Fi...\n"); 
+    while(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)){    //Conecta ao Wi-Fi - loop
         printf("Falha ao conectar!\n");
         sleep_ms(3000);
     }
-    printf("Conectado! IP: %s\n", ipaddr_ntoa(&netif_default->ip_addr));
+    printf("Conectado! IP: %s\n", ipaddr_ntoa(&netif_default->ip_addr));    //Conectado, e exibe o IP da rede no serial monitor
 
-    struct tcp_pcb *server = tcp_new();
-    tcp_bind(server, IP_ADDR_ANY, 80);
-    server = tcp_listen(server);
-    tcp_accept(server, tcp_server_accept);
+    struct tcp_pcb *server = tcp_new(); //Cria o servidor
+    tcp_bind(server, IP_ADDR_ANY, 80);  //Binda na porta 80
+    server = tcp_listen(server);        //Inicia o servidor
+    tcp_accept(server, tcp_server_accept);  //Aceita conexoes
 }
 
 //Aceita conexão TCP
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err){
-    tcp_recv(newpcb, tcp_server_recv);
+    tcp_recv(newpcb, tcp_server_recv);  //Recebe dados da conexao
     return ERR_OK;
 }
 
