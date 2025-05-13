@@ -18,8 +18,8 @@
 #include "lwip/tcp.h"
 #include "lwip/netif.h"
 
-#define WIFI_SSID "PRF"
-#define WIFI_PASSWORD "@hfs0800"
+#define WIFI_SSID "SUA_REDE_WIFI"
+#define WIFI_PASSWORD "SUA_SENHA_WIFI"
 
 //Definição de GPIOs
 #define JOYSTICK_Y 27  //ADC1
@@ -295,7 +295,7 @@ int main(){
         }else{
             sleep_ms(300);
         }
-
+        //Exibe informacoes no serial monitor
         printf("Area: %d | Luz: %d | Presenca: %s\n", numero, areas[numero].luminosidade,
                abs(eixo_y - 2048) > 500 ? "Sim" : "Nao");
     }
