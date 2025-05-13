@@ -22,10 +22,7 @@
 #define WIFI_PASSWORD "@hfs0800"
 
 //Definição de GPIOs
-#define JOYSTICK_X 26  //ADC0
 #define JOYSTICK_Y 27  //ADC1
-#define BOTAO_A 5       //Pino do botão A
-#define BOTAO_B 6       //Pino do botão B
 #define WS2812_PIN 7    //Pino do WS2812
 #define LED_RED 13      //Pino do LED vermelho
 #define BUZZER_PIN 21   //Pino do buzzer
@@ -41,7 +38,6 @@ typedef struct{
 
 AreaStatus areas[NUM_AREAS];  //Vetor com dados de cada área
 
-
 //Variável global para armazenar a cor (Entre 0 e 255 para intensidade)
 uint8_t led_r = 20; //Intensidade do vermelho
 uint8_t led_g = 20; //Intensidade do verde
@@ -50,7 +46,7 @@ uint8_t led_b = 20; //Intensidade do azul
 bool economia = false;  //Variável para indicar a economia de energia
 uint32_t ultimo_tempo_atividade = 0;    //Variável para armazenar o ultimo tempo de atividade
 uint volatile numero = 0;      //Variável para inicializar o numero com 0, indicando a camera 0 (WS2812B)
-uint16_t adc_x = 0, adc_y = 0;  //Variáveis para armazenar os valores do joystick
+uint16_t adc_y = 0;  //Variáveis para armazenar os valores do joystick
 volatile bool alarme_disparado = false;    //Variável para indicar o modo de monitoramento
 uint buzzer_slice;  //Slice para o buzzer
 
@@ -67,15 +63,6 @@ ssd1306_t ssd;
 //Função para modularizar a inicialização do hardware
 void inicializar_componentes(){
     stdio_init_all();
-
-    //Inicializa botões
-    gpio_init(BOTAO_A);
-    gpio_set_dir(BOTAO_A, GPIO_IN);
-    gpio_pull_up(BOTAO_A);
-    gpio_init(BOTAO_B);
-    gpio_set_dir(BOTAO_B, GPIO_IN);
-    gpio_pull_up(BOTAO_B);
-
     // Inicializa LED Vermelho
     gpio_init(LED_RED);
     gpio_set_dir(LED_RED, GPIO_OUT);
@@ -89,7 +76,6 @@ void inicializar_componentes(){
     
     //Inicializa ADC para leitura do Joystick
     adc_init();
-    adc_gpio_init(JOYSTICK_X);
     adc_gpio_init(JOYSTICK_Y);
 
     //Inicializa buzzer
@@ -116,14 +102,6 @@ void inicializar_componentes(){
     ssd1306_send_data(&ssd);
     ssd1306_fill(&ssd, false);
     ssd1306_send_data(&ssd);
-}
-
-//Função para tocar o buzzer simulando a entrada no modo de economia
-void bip_intercalado_suave(){
-        pwm_set_enabled(buzzer_slice, true);
-        sleep_ms(200);         //Duração do som
-        pwm_set_enabled(buzzer_slice, false);
-        sleep_ms(800);         //Pausa  
 }
 
 //Função para exibir informações no display
@@ -275,7 +253,7 @@ void tratar_requisicao_http(char *request){
         areas[numero].luminosidade += 10;     //Aumenta a luminosidade em 10%
         if(areas[numero].luminosidade > 100) areas[numero].luminosidade = 100;
     }else if(strstr(request, "GET /diminuir_luz")){ //Verifica se é o request "diminuir_luz"
-        areas[numero].luminosidade -= 10;   //Diminui a luminosidade em 10%
+        areas[numero].luminosidade= - 10;   //Diminui a luminosidade em 10%
         if(areas[numero].luminosidade < 0) areas[numero].luminosidade = 0;
         //set_one_led(led_r, led_g, led_b, numero);
     }else if(strstr(request, "GET /alarme_on")){    //Verifica se é o request "alarme_on"
