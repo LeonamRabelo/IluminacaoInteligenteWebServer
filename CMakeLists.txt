@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(IluminacaoWebServer IluminacaoWebServer.c inc/ssd1306.c)
+add_executable(IluminacaoWebServer IluminacaoWebServer.c inc/ssd1306.c inc/matriz_leds.c)
 
 pico_set_program_name(IluminacaoWebServer "IluminacaoWebServer")
 pico_set_program_version(IluminacaoWebServer "0.1")

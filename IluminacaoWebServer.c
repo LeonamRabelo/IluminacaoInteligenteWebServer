@@ -11,6 +11,7 @@
 #include "inc/ssd1306.h"
 #include "inc/font.h"
 #include "ws2812.pio.h"
+#include "inc/matriz_leds.h"
 
 #include "pico/cyw43_arch.h"
 #include "lwip/pbuf.h"
@@ -31,12 +32,11 @@
 #define I2C_SDA 14      //Pino SDA - Dados
 #define I2C_SCL 15      //Pino SCL - Clock
 #define IS_RGBW false   //Maquina PIO para RGBW
-#define NUM_PIXELS 25   //Quantidade de LEDs na matriz
-#define NUM_NUMBERS 11  //Quantidade de numeros na matriz
 
 #define NUM_AREAS 10
 typedef struct{
     int luminosidade;  //0-100%
+    //posso guardar tambem se ha presenca ou nao aqui, mas deixei de fora na simulação por enquanto
 }AreaStatus;
 
 AreaStatus areas[NUM_AREAS];  //Vetor com dados de cada área
@@ -63,123 +63,6 @@ void tratar_requisicao_http(char *request);
 //////////////////////////////////////////BASE PRONTA//////////////////////////////////////////////////////////////////////
 //Display SSD1306
 ssd1306_t ssd;
-
-//Função para ligar um LED
-static inline void put_pixel(uint32_t pixel_grb){
-    pio_sm_put_blocking(pio0, 0, pixel_grb << 8u);
-}
-
-//Função para converter cores RGB para um valor de 32 bits
-static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b){
-    return ((uint32_t)(r) << 8) | ((uint32_t)(g) << 16) | (uint32_t)(b);
-}
-
-//Desenhos dos numeros para a Matriz de leds
-bool led_numeros[NUM_NUMBERS][NUM_PIXELS] = {
-    //Número 0
-    {
-    0, 1, 1, 1, 0,      
-    0, 1, 0, 1, 0, 
-    0, 1, 0, 1, 0,   
-    0, 1, 0, 1, 0,  
-    0, 1, 1, 1, 0   
-    },
-
-    //Número 1
-    {0, 1, 1, 1, 0,      
-    0, 0, 1, 0, 0, 
-    0, 0, 1, 0, 0,    
-    0, 1, 1, 0, 0,  
-    0, 0, 1, 0, 0   
-    },
-
-    //Número 2
-    {0, 1, 1, 1, 0,      
-    0, 1, 0, 0, 0, 
-    0, 1, 1, 1, 0,    
-    0, 0, 0, 1, 0,
-    0, 1, 1, 1, 0   
-    },
-
-    //Número 3
-    {0, 1, 1, 1, 0,      
-    0, 0, 0, 1, 0, 
-    0, 1, 1, 1, 0,    
-    0, 0, 0, 1, 0,  
-    0, 1, 1, 1, 0   
-    },
-
-    //Número 4
-    {0, 1, 0, 0, 0,      
-    0, 0, 0, 1, 0, 
-    0, 1, 1, 1, 0,    
-    0, 1, 0, 1, 0,     
-    0, 1, 0, 1, 0   
-    },
-
-    //Número 5
-    {0, 1, 1, 1, 0,      
-    0, 0, 0, 1, 0, 
-    0, 1, 1, 1, 0,   
-    0, 1, 0, 0, 0,  
-    0, 1, 1, 1, 0   
-    },
-
-    //Número 6
-    {0, 1, 1, 1, 0,      
-    0, 1, 0, 1, 0, 
-    0, 1, 1, 1, 0,    
-    0, 1, 0, 0, 0,  
-    0, 1, 1, 1, 0   
-    },
-
-    //Número 7
-    {0, 1, 0, 0, 0,      
-    0, 0, 0, 1, 0,   
-    0, 1, 0, 0, 0,    
-    0, 0, 0, 1, 0,  
-    0, 1, 1, 1, 0  
-    },
-
-    //Número 8
-    {0, 1, 1, 1, 0,      
-    0, 1, 0, 1, 0, 
-    0, 1, 1, 1, 0,    
-    0, 1, 0, 1, 0,  
-    0, 1, 1, 1, 0   
-    },
-
-    //Número 9
-    {0, 1, 1, 1, 0,      
-    0, 0, 0, 1, 0, 
-    0, 1, 1, 1, 0,    
-    0, 1, 0, 1, 0,  
-    0, 1, 1, 1, 0   
-    },
-
-    //APAGAR OS LEDS, representado pelo número (posição) 10
-    {0, 0, 0, 0, 0,      
-    0, 0, 0, 0, 0, 
-    0, 0, 0, 0, 0,    
-    0, 0, 0, 0, 0,  
-    0, 0, 0, 0, 0   
-    }
-};
-
-//Função para envio dos dados para a matriz de leds
-void set_one_led(uint8_t r, uint8_t g, uint8_t b, int numero){
-    //Define a cor com base nos parâmetros fornecidos
-    uint32_t color = urgb_u32(r, g, b);
-
-    //Define todos os LEDs com a cor especificada
-    for(int i = 0; i < NUM_PIXELS; i++){
-        if(led_numeros[numero][i]){     //Chama a matriz de leds com base no numero passado
-            put_pixel(color);           //Liga o LED com um no buffer
-        }else{
-            put_pixel(0);               //Desliga os LEDs com zero no buffer
-        }
-    }
-}
 
 //Função para modularizar a inicialização do hardware
 void inicializar_componentes(){
@@ -241,18 +124,6 @@ void bip_intercalado_suave(){
         sleep_ms(200);         //Duração do som
         pwm_set_enabled(buzzer_slice, false);
         sleep_ms(800);         //Pausa  
-}
-
-//Debounce do botão (evita leituras falsas)
-bool debounce_botao(uint gpio){
-    static uint32_t ultimo_tempo = 0;   
-    uint32_t tempo_atual = to_ms_since_boot(get_absolute_time());   //Tempo atual
-
-    if (gpio_get(gpio) == 0 && (tempo_atual - ultimo_tempo) > 200){ //200ms de debounce
-        ultimo_tempo = tempo_atual;
-        return true;
-    }
-    return false;
 }
 
 //Função para exibir informações no display
@@ -329,17 +200,17 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err){
 
 //Requisição HTTP
 static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err){
-    if(!p) return tcp_close(tpcb);
+    if(!p) return tcp_close(tpcb);  //Se nao houver dados, fecha a conexao
 
-    char *request = (char *)malloc(p->len + 1);
-    memcpy(request, p->payload, p->len);
-    request[p->len] = '\0';
-    tratar_requisicao_http(request);
+    char *request = (char *)malloc(p->len + 1); //Aloca memória para o request
+    memcpy(request, p->payload, p->len);    //Copia o request
+    request[p->len] = '\0'; //Terminador de string
+    tratar_requisicao_http(request);    //Trata a requisição HTTP, chama a funcao
 
-    bool atividade = abs(adc_y - 2048) > 500;
+    bool atividade = abs(adc_y - 2048) > 500;   //Verifica se houve atividade
 
-    char html[1024];
-snprintf(html, sizeof(html),
+    char html[1024];    //Aloca memória para o HTML
+snprintf(html, sizeof(html),    //Cria o HTML
     "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
     "<!DOCTYPE html><html><head>"
     "<meta charset='UTF-8'><title>Iluminaçãoo</title>"
@@ -367,8 +238,12 @@ snprintf(html, sizeof(html),
     "</div>"
 
     "<div class='btns'>"
-    "<form action='/alarme_on'><button>Disparar Alarme</button></form>"
-    "<form action='/alarme_off'><button>Parar Alarme</button></form>"
+    "<form action='/alarme_on'><button>Dispara Alarme</button></form>"
+    "<form action='/alarme_off'><button>Para Alarme</button></form>"
+    "</div>"
+
+    "<div class='btns'>"
+    "<form action='/refresh'><button>Atualizar</button></form>"
     "</div>"
 
     "</body></html>",
@@ -377,64 +252,69 @@ snprintf(html, sizeof(html),
     atividade ? "Sim" : "Nao"
 );
 
-    tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);
-    tcp_output(tpcb);
-    free(request);
+    tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);   //Envia o HTML
+    tcp_output(tpcb);                   //Envia os dados
+    free(request);                      //Libera a memória
     pbuf_free(p);
-    return ERR_OK;
+    return ERR_OK;                  
 }
 
 //Trata a requisição HTTP
 void tratar_requisicao_http(char *request){
-    if (strstr(request, "GET /area_prev")){
+    if (strstr(request, "GET /area_prev")){ //Verifica se é o request "area_prev"
     numero--;   //Incrementa o valor do numero (matriz de leds)
         if(numero == -1){   //Se chegar no 0 e for incrementado, volta ao 9
             numero = 9; //Retorna ao 9
         }
-    }else if(strstr(request, "GET /area_next")){
+    }else if(strstr(request, "GET /area_next")){    //Verifica se é o request "area_next"
         numero++;   //Incrementa o valor do numero (matriz de leds)
         if(numero == 10){   //Se chegar no 9 e for incrementado, volta ao 0
             numero = 0; //Retorna ao 0
         }
-    }else if(strstr(request, "GET /aumentar_luz")){
-        areas[numero].luminosidade += 10;
+    }else if(strstr(request, "GET /aumentar_luz")){     //Verifica se é o request "aumentar_luz"
+        areas[numero].luminosidade += 10;     //Aumenta a luminosidade em 10%
         if(areas[numero].luminosidade > 100) areas[numero].luminosidade = 100;
-    }else if(strstr(request, "GET /diminuir_luz")){
-        areas[numero].luminosidade -= 10;
+    }else if(strstr(request, "GET /diminuir_luz")){ //Verifica se é o request "diminuir_luz"
+        areas[numero].luminosidade -= 10;   //Diminui a luminosidade em 10%
         if(areas[numero].luminosidade < 0) areas[numero].luminosidade = 0;
         //set_one_led(led_r, led_g, led_b, numero);
-    }else if(strstr(request, "GET /alarme_on")){
-        alarme_disparado = true;
+    }else if(strstr(request, "GET /alarme_on")){    //Verifica se é o request "alarme_on"
+        alarme_disparado = true;            //Envia para a variavel global como true, ligado
     }
-    else if(strstr(request, "GET /alarme_off")){
-        alarme_disparado = false;
+    else if(strstr(request, "GET /alarme_off")){    //Verifica se é o request "alarme_off"
+        alarme_disparado = false;               //Envia para a variavel global como false, desligado
         pwm_set_enabled(buzzer_slice, false); //Garantir desligamento imediato
+    }
+    else if(strstr(request, "GET /refresh")){       //Verifica se é o request "refresh"
+    //Nada, so manda a requisição para atualizar com os dados atualizados
     }
 }
 
-int main() {
-    inicializar_componentes();
-    iniciar_webserver();
+int main(){
+    inicializar_componentes();  //Inicia os componentes
+    iniciar_webserver();        //Inicia o webserver
 
-    while (true) {
+    while(true){
+        //Leitura do eixo Y, para leitura de presença
         adc_select_input(0);
         int eixo_y = adc_read();
         adc_y = eixo_y; // Armazena global para acesso em Web
 
+        //Limita luminosidade entre 0 e 100
         if (areas[numero].luminosidade > 100) areas[numero].luminosidade = 100;
-        if (areas[numero].luminosidade < 0) areas[numero].luminosidade = 0;
+        if (areas[numero].luminosidade < 0) areas[numero].luminosidade = 0; 
 
-        display_info(areas[numero].luminosidade, abs(eixo_y - 2048) > 500);
-        verificar_presenca(eixo_y);
-        atualizar_leds_web();
+        display_info(areas[numero].luminosidade, abs(eixo_y - 2048) > 500); //Exibe informacoes no display
+        verificar_presenca(eixo_y); //Verifica se houve atividade na area
+        atualizar_leds_web();   //Atualiza leds conforme intensidade definida via Web
 
-        // Alarme sonoro intermitente controlado por botão web
+        //Alarme sonoro intermitente controlado por botão web
         if(alarme_disparado){
             pwm_set_enabled(buzzer_slice, true);
             sleep_ms(200);
             pwm_set_enabled(buzzer_slice, false);
             sleep_ms(800);
-        } else {
+        }else{
             sleep_ms(300);
         }
 
