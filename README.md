@@ -66,7 +66,7 @@ Altere para sua rede local antes de compilar.
 ---
 
 # 📸 Interface Web
-![WebServer](image.png)
+![WebServer](image-1.png)
 
 ---
 
