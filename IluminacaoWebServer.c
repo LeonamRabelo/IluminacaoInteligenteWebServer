@@ -102,19 +102,23 @@ void inicializar_componentes(){
 void display_info(int luminosidade, bool atividade){
     char buffer[32];    //Buffer para armazenar a string
     ssd1306_fill(&ssd, false);  //Limpa a tela
-    
+    //Borda
+    ssd1306_rect(&ssd, 0, 0, 128, 64, true, false);
+    ssd1306_rect(&ssd, 1, 1, 128 - 2, 64 - 2, true, false);
+    ssd1306_rect(&ssd, 2, 2, 128 - 4, 64 - 4, true, false);
+    ssd1306_rect(&ssd, 3, 3, 128 - 6, 64 - 6, true, false);
     //Verifica se estamos em modo de economia ou nao para exibir informacoes diferentes
     if(economia){
         sprintf(buffer, "Area %d", numero);
-        ssd1306_draw_string(&ssd, buffer, 10, 10);
+        ssd1306_draw_string(&ssd, buffer, 30, 10);
         sprintf(buffer, "Modo Economia");
         ssd1306_draw_string(&ssd, buffer, 10, 30);
     }else{
         sprintf(buffer, "Area %d", numero);
-        ssd1306_draw_string(&ssd, buffer, 10, 10);
-        sprintf(buffer, "Luz em %d", luminosidade);
+        ssd1306_draw_string(&ssd, buffer, 30, 10);
+        sprintf(buffer, "Luz em %d%%", luminosidade);
         ssd1306_draw_string(&ssd, buffer, 10, 30);
-        sprintf(buffer, "Presenca %s", atividade ? "Sim" : "Nao");
+        sprintf(buffer, "Presenca: %s", atividade ? "Sim" : "Nao");
         ssd1306_draw_string(&ssd, buffer, 10, 50);
     }
     ssd1306_send_data(&ssd);    //Envia para o display
@@ -172,60 +176,70 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err){
 
 //Requisição HTTP
 static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err){
-    if(!p) return tcp_close(tpcb);  //Se nao houver dados, fecha a conexao
+    if(!p) return tcp_close(tpcb);  // Se nao houver dados, fecha a conexao
 
-    char *request = (char *)malloc(p->len + 1); //Aloca memória para o request
-    memcpy(request, p->payload, p->len);    //Copia o request
-    request[p->len] = '\0'; //Terminador de string
-    tratar_requisicao_http(request);    //Trata a requisição HTTP, chama a funcao
+    char *request = (char *)malloc(p->len + 1); // Aloca memória para o request
+    memcpy(request, p->payload, p->len);        // Copia o request
+    request[p->len] = '\0';                     // Terminador de string
+    tratar_requisicao_http(request);            // Tratar comandos HTTP
 
-    bool atividade = abs(adc_y - 2048) > 500;   //Verifica se houve atividade
+    bool atividade = abs(adc_y - 2048) > 500;
 
-    char html[1024];    //Aloca memória para o HTML
-snprintf(html, sizeof(html),    //Cria o HTML
-    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
-    "<!DOCTYPE html><html><head>"
-    "<meta charset='UTF-8'><title>Iluminaçãoo</title>"
-    "<script> setInterval(function() {location.href='/';}, 2000); </script>"
-    "<style>"
-    "body {background:#46dd73;font-family:sans-serif;text-align:center;margin-top:30px;}"
-    "h1,h2,h3,h4 {margin:10px;}"
-    ".btns {display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top: 20px;}"
-    "button {background:lightgray;font-size:20px;padding:10px 20px;border-radius:8px;border:none;}"
-    "</style></head><body>"
+    char html[2048];
+    snprintf(html, sizeof(html),
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
+        "<!DOCTYPE html><html><head>"
+        "<meta charset='UTF-8'><title>Iluminação</title>"
+        "<script>"
+        "let bloqueiaRefresh = false;"
+        "let timer = null;"
+        "function atualizarLuminosidade(valor){"
+        "clearTimeout(timer);"
+        "bloqueiaRefresh = true;"
+        "timer = setTimeout(()=>{"
+        "fetch('/set_luz?valor=' + valor);"
+        "bloqueiaRefresh = false;"
+        "}, 200);"
+        "}"
+        "setInterval(()=>{"
+        "if(!bloqueiaRefresh) location.href='/';"
+        "}, 2000);"
+        "</script>"
+        "<style>"
+        "body {background:#46dd73;font-family:sans-serif;text-align:center;margin-top:30px;}"
+        "h1,h2,h3,h4 {margin:10px;}"
+        ".btns {display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:20px;}"
+        "button {background:lightgray;font-size:20px;padding:10px 20px;border-radius:8px;border:none;}"
+        "input[type=range] {width: 40%%;}"
+        "</style></head><body>"
+        "<h1>Sistema de Iluminação</h1>"
+        "<div class='btns'>"
+        "<form action='/area_prev'><button>&larr; Anterior</button></form>"
+        "<form action='/area_next'><button>Próxima &rarr;</button></form>"
+        "</div>"
+        "<h2>Área: %d</h2>"
+        "<h3>Luz: %d%%</h3>"
+        "<h3>Presença: %s</h3>"
+        "<h3><br>Luminosidade:</h3>"
+        "<input type='range' min='0' max='100' value='%d' "
+        "oninput='atualizarLuminosidade(this.value)'>"
+        "<div class='btns'>"
+        "<form action='/alarme_on'><button>Disparar Alarme</button></form>"
+        "<form action='/alarme_off'><button>Parar Alarme</button></form>"
+        "</div>"
+        "</body></html>",
 
-    "<h1>Sistema de Iluminacao</h1>"
+        numero,
+        areas[numero].luminosidade,
+        atividade ? "Sim" : "Não",
+        areas[numero].luminosidade
+    );
 
-    "<div class='btns'>"
-    "<form action='/area_prev'><button>&larr; Anterior</button></form>"
-    "<form action='/area_next'><button>Proxima &rarr;</button></form>"
-    "</div>"
-
-    "<h2>Area: %d</h2>"
-    "<h3>Luz: %d%%</h3>"
-    "<h3>Presenca: %s</h3>"
-
-    "<div class='btns'>"
-    "<form action='/diminuir_luz'><button>- Luz</button></form>"
-    "<form action='/aumentar_luz'><button>+ Luz</button></form>"
-    "</div>"
-
-    "<div class='btns'>"
-    "<form action='/alarme_on'><button>Dispara Alarme</button></form>"
-    "<form action='/alarme_off'><button>Para Alarme</button></form>"
-    "</div>"
-
-    "</body></html>",
-    numero,
-    areas[numero].luminosidade,
-    atividade ? "Sim" : "Nao"
-);
-
-    tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);   //Envia o HTML
-    tcp_output(tpcb);                   //Envia os dados
-    free(request);                      //Libera a memória
+    tcp_write(tpcb, html, strlen(html), TCP_WRITE_FLAG_COPY);
+    tcp_output(tpcb);
+    free(request);
     pbuf_free(p);
-    return ERR_OK;                  
+    return ERR_OK;
 }
 
 //Trata a requisição HTTP
@@ -240,12 +254,13 @@ void tratar_requisicao_http(char *request){
         if(numero == 10){   //Se chegar no 9 e for incrementado, volta ao 0
             numero = 0; //Retorna ao 0
         }
-    }else if(strstr(request, "GET /aumentar_luz")){     //Verifica se é o request "aumentar_luz"
-        areas[numero].luminosidade += 10;     //Aumenta a luminosidade em 10%
-        if(areas[numero].luminosidade > 100) areas[numero].luminosidade = 100;
-    }else if(strstr(request, "GET /diminuir_luz")){ //Verifica se é o request "diminuir_luz"
-        areas[numero].luminosidade -= 10;   //Diminui a luminosidade em 10%
-        if(areas[numero].luminosidade < 0) areas[numero].luminosidade = 0;
+    }else if (strstr(request, "GET /set_luz?valor=")) {
+    int valor;
+    if(sscanf(strstr(request, "valor="), "valor=%d", &valor) == 1){
+        if (valor >= 0 && valor <= 100){
+            areas[numero].luminosidade = valor;
+        }
+    }
     }else if(strstr(request, "GET /alarme_on")){    //Verifica se é o request "alarme_on"
         alarme_disparado = true;            //Envia para a variavel global como true, ligado
     }
@@ -283,7 +298,7 @@ int main(){
             sleep_ms(300);
         }
         //Exibe informacoes no serial monitor
-        printf("Area: %d | Luz: %d | Presenca: %s\n", numero, areas[numero].luminosidade,
+        printf("Area: %d | Luz: %d%% | Presenca: %s\n", numero, areas[numero].luminosidade,
                abs(eixo_y - 2048) > 500 ? "Sim" : "Nao");
     }
     return 0;
