@@ -18,8 +18,8 @@
 #include "lwip/tcp.h"
 #include "lwip/netif.h"
 
-#define WIFI_SSID "SUA_REDE_WIFI"
-#define WIFI_PASSWORD "SUA_SENHA_WIFI"
+#define WIFI_SSID "PRF"
+#define WIFI_PASSWORD "@hfs0800"
 
 //Definição de GPIOs
 #define JOYSTICK_Y 27  //ADC1
@@ -33,15 +33,10 @@
 #define NUM_AREAS 10
 typedef struct{
     int luminosidade;  //0-100%
-    //posso guardar tambem se ha presenca ou nao aqui, mas deixei de fora na simulação por enquanto
+    //posso guardar tambem se ha presenca ou nao aqui, mas deixei de fora na simulação por enquanto por ta utilizando o joystick
 }AreaStatus;
 
 AreaStatus areas[NUM_AREAS];  //Vetor com dados de cada área
-
-//Variável global para armazenar a cor (Entre 0 e 255 para intensidade)
-uint8_t led_r = 20; //Intensidade do vermelho
-uint8_t led_g = 20; //Intensidade do verde
-uint8_t led_b = 20; //Intensidade do azul
 
 bool economia = false;  //Variável para indicar a economia de energia
 uint32_t ultimo_tempo_atividade = 0;    //Variável para armazenar o ultimo tempo de atividade
@@ -51,7 +46,6 @@ volatile bool alarme_disparado = false;    //Variável para indicar o modo de mo
 uint buzzer_slice;  //Slice para o buzzer
 
 //Prototipagem
-void set_one_led(uint8_t r, uint8_t g, uint8_t b, int numero);
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err);
 static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
 void tratar_requisicao_http(char *request);
@@ -192,6 +186,7 @@ snprintf(html, sizeof(html),    //Cria o HTML
     "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n"
     "<!DOCTYPE html><html><head>"
     "<meta charset='UTF-8'><title>Iluminaçãoo</title>"
+    "<script> setInterval(function() {location.href='/';}, 2000); </script>"
     "<style>"
     "body {background:#46dd73;font-family:sans-serif;text-align:center;margin-top:30px;}"
     "h1,h2,h3,h4 {margin:10px;}"
@@ -218,10 +213,6 @@ snprintf(html, sizeof(html),    //Cria o HTML
     "<div class='btns'>"
     "<form action='/alarme_on'><button>Dispara Alarme</button></form>"
     "<form action='/alarme_off'><button>Para Alarme</button></form>"
-    "</div>"
-
-    "<div class='btns'>"
-    "<form action='/refresh'><button>Atualizar</button></form>"
     "</div>"
 
     "</body></html>",
@@ -253,18 +244,14 @@ void tratar_requisicao_http(char *request){
         areas[numero].luminosidade += 10;     //Aumenta a luminosidade em 10%
         if(areas[numero].luminosidade > 100) areas[numero].luminosidade = 100;
     }else if(strstr(request, "GET /diminuir_luz")){ //Verifica se é o request "diminuir_luz"
-        areas[numero].luminosidade= - 10;   //Diminui a luminosidade em 10%
+        areas[numero].luminosidade -= 10;   //Diminui a luminosidade em 10%
         if(areas[numero].luminosidade < 0) areas[numero].luminosidade = 0;
-        //set_one_led(led_r, led_g, led_b, numero);
     }else if(strstr(request, "GET /alarme_on")){    //Verifica se é o request "alarme_on"
         alarme_disparado = true;            //Envia para a variavel global como true, ligado
     }
     else if(strstr(request, "GET /alarme_off")){    //Verifica se é o request "alarme_off"
         alarme_disparado = false;               //Envia para a variavel global como false, desligado
         pwm_set_enabled(buzzer_slice, false); //Garantir desligamento imediato
-    }
-    else if(strstr(request, "GET /refresh")){       //Verifica se é o request "refresh"
-    //Nada, so manda a requisição para atualizar com os dados atualizados
     }
 }
 
