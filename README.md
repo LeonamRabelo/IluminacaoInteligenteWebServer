@@ -49,8 +49,6 @@ Ao conectar o Pico W à sua rede Wi-Fi, o endereço IP será exibido na serial. 
 - 🚨 Ativar ou desativar alarme
 - 👁️ Visualizar estado da presença e intensidade
 
-> ⚠️ **Atenção:** As informações como presença e estado são atualizadas somente com novo acesso ou refresh da página.
-
 ---
 
 ## 📶 Configuração Wi-Fi
