@@ -12,14 +12,13 @@
 #include "inc/font.h"
 #include "ws2812.pio.h"
 #include "inc/matriz_leds.h"
-
 #include "pico/cyw43_arch.h"
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
 #include "lwip/netif.h"
 
-#define WIFI_SSID "PRF"
-#define WIFI_PASSWORD "@hfs0800"
+#define WIFI_SSID "SSID"             //Alterar para o SSID da rede
+#define WIFI_PASSWORD "SENHA"    //Alterar para a senha da rede
 
 //Definição de GPIOs
 #define JOYSTICK_Y 27  //ADC1
@@ -220,6 +219,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
         "<h2>Área: %d</h2>"
         "<h3>Luz: %d%%</h3>"
         "<h3>Presença: %s</h3>"
+        "<h3>Modo de economia %s</h3>"
         "<h3><br>Luminosidade:</h3>"
         "<input type='range' min='0' max='100' value='%d' "
         "oninput='atualizarLuminosidade(this.value)'>"
@@ -232,6 +232,7 @@ static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, er
         numero,
         areas[numero].luminosidade,
         atividade ? "Sim" : "Não",
+        economia ? "ativada" : "desativada",
         areas[numero].luminosidade
     );
 

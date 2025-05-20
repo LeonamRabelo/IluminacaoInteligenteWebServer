@@ -8,7 +8,7 @@
 #define TCP_SND_BUF (4 * TCP_MSS)
 
 //CONFIGURACOES MINIMA PARA LWIP
-#define REQUEST_BUFFER_SIZE 2048
+#define REQUEST_BUFFER_SIZE 2048            //Maior buffer de requisicao, reduzindo chances de perca em alto trafego na rede
 #define MEM_LIBC_MALLOC 0 
 #define MEMP_MEM_MALLOC 0 
 
@@ -19,9 +19,9 @@
 #define LWIP_TCP 1
 #define LWIP_UDP 1
 #define MEM_ALIGNMENT 4
-#define MEM_SIZE (32 * 1024)            // Ajuste conforme necessário
+#define MEM_SIZE (32 * 1024)            //Memoria para o heap
 #define MEMP_NUM_PBUF 16
-#define PBUF_POOL_SIZE 32               // Ajuste conforme necessário 16->32
+#define PBUF_POOL_SIZE 32               //Numero de buffers para o pool disponiveis, de 16 para 32
 #define MEMP_NUM_UDP_PCB 4
 #define MEMP_NUM_TCP_PCB 4
 #define MEMP_NUM_TCP_SEG 16
